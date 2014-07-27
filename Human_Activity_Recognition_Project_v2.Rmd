@@ -1,0 +1,125 @@
+---
+title: "Exercise Prediction based on Human Activity Recognition Datasets"
+author: "Nick Oswald"
+date: "Friday, July 25, 2014"
+output: html_document
+---
+
+##Synopsis:
+
+This paper will analyze Human Activity Recognition data sets to build a 
+prediction algorithm that successful predicts which activity is being performed
+based on the data provided.
+
+##Data Processing:
+
+First we load the training and test datasets into data frames using R while
+being aware that all testing should be done on the training set with the final
+model based on the test set.
+
+We further break the training set into training sets one and two, putting 75%
+in training set one and the rest in training set two. Most validation will be
+done on training set one and testing on training set two. This will help ensure
+we don't overfit the model by using the final test data set.
+
+```{r}
+train.set <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+test.set <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+library(caret)
+set.seed(1234)
+inTrain <- createDataPartition(y=train.set$classe, p=0.75, list = FALSE)
+train.set1 <- train.set[inTrain,]
+train.set2 <- train.set[-inTrain,]
+```
+
+Since there are 160 columns of data, it probably wouldn't make sense to build
+a model using all 160 columns, so let's preprocess the data and see if we can
+get rid of some variables that basically say the same thing (are highly
+correlated with one another). We will user the caret package function
+nearZeroVar to exclude the columns with near zero variances. We furthermore
+take out columns 1 through 6 since this has irrelevant data to the activities
+we're trying to measure.
+
+```{r}
+test.set.zerovar <- nearZeroVar(test.set)
+train.set1 <- train.set1[,-test.set.zerovar]
+train.set1 <- train.set1[,-c(1:6)]
+#train.set1 <- as.data.frame(data.matrix(train.set1))
+
+train.set2 <- train.set2[,-test.set.zerovar]
+train.set2 <- train.set2[,-c(1:6)]
+
+#train.set2 <- as.data.frame(data.matrix(train.set2))
+
+
+test.set <- test.set[,-test.set.zerovar]
+test.set <- test.set[,-c(1:6)]
+
+#test.set <- as.data.frame(data.matrix(test.set))
+#test.set1 <- test.set[,colSums(is.na(test.set)) != nrow(test.set)]
+
+
+
+#corr_m <- abs(cor(train.set1[,-101]))
+#diag(corr_m) <- 0
+#which(corr_m>0.8, arr.ind=T)
+#
+#Exclude columns where correlation matrix is greater than .8 (42); should yield 17 maximum predictors, allowing model(s) to run faster
+#
+```
+
+
+Using the caret package in R, we will now apply prediction algorithms
+to get a general understanding of which predicts best for the data. We will use
+k-means cross-validation with 10 slices.
+
+```{r}
+
+fitControl <- trainControl (##10 Fold Cross-Validation
+  method="repeatedcv",
+  number=10,
+  repeats=10)
+
+#fit.glm <- train(classe~., data = train.set1,
+#                 method = "glm", preProcess = c("center", "scale"),
+#                 trControl = fitControl)
+fit.tree <- train(classe~., data = train.set1,
+                  method = "rpart", preProcess = c("center", "scale"),
+                  trControl = fitControl)
+#fit.rf <- train(classe~.,data = train.set1,
+#                method = "rf", preProcess = c("center", "scale"),
+#                prox=TRUE, trControl = fitControl)
+fit.boost <- train(classe~., data = train.set1,method = "gbm", 
+                   preProcess = c("center", "scale"), verbose=FALSE, 
+                   trControl = fitControl)
+#fit.glm
+fit.tree
+#fit.rf
+fit.boost
+```
+
+The boost model has a much higher accuracy than the tree based model, so we will
+use that one to predict against the test set.
+
+```{r}
+#pred_tree <- predict(object = fit.tree, newdata = test.set, type= "prob", na.action=na.pass)
+
+#
+# Need to check potential outputs of predict function and tree so that correct output is given
+#
+
+#pred_rf <- predict(fit.rf, test.set)
+pred_tree <- predict(fit.tree, test.set)
+pred_boost <- predict(fit.boost, test.set)
+
+pred_tree
+
+pred_boost
+
+```
+
+
+##Results:
+
+Note that the tree model doesn't predict over all possible factor variables while
+the boost model does, which is expected since the boost model has higher accuracy.
